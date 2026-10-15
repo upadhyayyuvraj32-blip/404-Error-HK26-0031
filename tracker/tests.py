@@ -176,3 +176,13 @@ class APITests(TestCase):
         self.assertEqual(post_response.status_code, 200)
         post_data = post_response.json()
         self.assertEqual(post_data["status"], "success")
+
+    def test_api_stock_analysis(self):
+        response = self.client.get(reverse("api_stock_analysis", kwargs={"ticker": "RELIANCE.NS"}))
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["status"], "success")
+        self.assertIn("verdict", data["data"])
+        self.assertIn("projections", data["data"])
+        self.assertIn("best_time_to_buy", data["data"])
+        self.assertIn("action_detail_hi", data["data"])

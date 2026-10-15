@@ -16,6 +16,7 @@ from .stock_service import (
     get_market_overview,
     get_stock_history,
     search_stocks,
+    calculate_investment_analysis,
     POPULAR_STOCKS,
 )
 from .news_service import get_and_analyze_news_for_ticker
@@ -125,6 +126,13 @@ def api_sentiment_summary(request: HttpRequest, ticker: str) -> JsonResponse:
             alignment = "Neutral / Stable"
             alignment_badge = "neutral"
 
+        # Calculate investment advisory intelligence
+        inv_analysis = calculate_investment_analysis(
+            clean_ticker,
+            sentiment_score=metrics.get("average_score", 0.0),
+            bullish_index=metrics.get("bullish_index", 50.0),
+        )
+
         summary = {
             "ticker": clean_ticker,
             "metrics": metrics,
@@ -133,6 +141,7 @@ def api_sentiment_summary(request: HttpRequest, ticker: str) -> JsonResponse:
             "sentiment_price_alignment": alignment,
             "alignment_badge": alignment_badge,
             "sample_size": len(news_items),
+            "investment_analysis": inv_analysis,
             "ai_disclaimer": "AI sentiment analysis represents linguistic polarity of news coverage and is not financial advice or a price prediction.",
         }
 
@@ -140,6 +149,24 @@ def api_sentiment_summary(request: HttpRequest, ticker: str) -> JsonResponse:
     except Exception as e:
         logger.error(f"api_sentiment_summary error: {e}")
         return JsonResponse({"status": "error", "message": str(e)}, status=500)
+
+
+def api_stock_analysis(request: HttpRequest, ticker: str) -> JsonResponse:
+    """Dedicated endpoint returning actionable investment analysis, entry zones, and price targets."""
+    try:
+        clean_ticker = ticker.strip().upper()
+        news_items = get_and_analyze_news_for_ticker(clean_ticker, limit=10)
+        metrics = aggregate_sentiment_metrics(news_items)
+        analysis = calculate_investment_analysis(
+            clean_ticker,
+            sentiment_score=metrics.get("average_score", 0.0),
+            bullish_index=metrics.get("bullish_index", 50.0),
+        )
+        return JsonResponse({"status": "success", "data": analysis})
+    except Exception as e:
+        logger.error(f"api_stock_analysis error: {e}")
+        return JsonResponse({"status": "error", "message": str(e)}, status=500)
+
 
 
 def api_company_comparison(request: HttpRequest) -> JsonResponse:

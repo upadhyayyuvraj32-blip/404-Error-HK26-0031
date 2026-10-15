@@ -1,15 +1,16 @@
-/* TrendPulse AI - Financial Analytics Theme */
+/* TrendPulse AI - Premium Financial Analytics Design System */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
+/* Color Theme Tokens */
 :root {
-    --bg-main: #070a12;
-    --bg-surface: #0e1526;
-    --bg-card: #131d33;
-    --bg-card-hover: #182542;
-    --border-color: #1e2c4a;
-    --border-highlight: #2c3e66;
-    --accent-primary: #38bdf8;
+    --bg-main: #060911;
+    --bg-surface: #0b1120;
+    --bg-card: #0f172a;
+    --bg-card-hover: #16223b;
+    --border-color: #1e293b;
+    --border-highlight: #334155;
+    --accent-cyan: #38bdf8;
     --accent-glow: rgba(56, 189, 248, 0.25);
     --bullish-green: #10b981;
     --bullish-glow: rgba(16, 185, 129, 0.2);
@@ -20,10 +21,30 @@
     --text-muted: #64748b;
 }
 
+/* Light Theme Overrides */
+html:not(.dark) {
+    --bg-main: #f8fafc;
+    --bg-surface: #ffffff;
+    --bg-card: #ffffff;
+    --bg-card-hover: #f1f5f9;
+    --border-color: #e2e8f0;
+    --border-highlight: #cbd5e1;
+    --accent-cyan: #0284c7;
+    --accent-glow: rgba(2, 132, 199, 0.15);
+    --bullish-green: #059669;
+    --bullish-glow: rgba(5, 150, 105, 0.15);
+    --bearish-red: #e11d48;
+    --bearish-glow: rgba(225, 29, 72, 0.15);
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
+}
+
 body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background-color: var(--bg-main);
     color: var(--text-primary);
+    transition: background-color 0.25s ease, color 0.25s ease;
     overflow-x: hidden;
 }
 
@@ -32,34 +53,52 @@ body {
     letter-spacing: -0.02em;
 }
 
-/* Custom Scrollbar */
+/* Custom Scrollbars */
 ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
 }
 ::-webkit-scrollbar-track {
-    background: var(--bg-main);
+    background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-    background: #1e2c4a;
+    background: var(--border-color);
     border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-    background: #334870;
+    background: var(--border-highlight);
 }
 
-/* Glass & Card styles */
+/* Terminal Card Styling */
 .terminal-card {
-    background-color: var(--bg-surface);
+    background-color: var(--bg-card);
     border: 1px solid var(--border-color);
-    border-radius: 0.75rem;
-    transition: all 0.2s ease-in-out;
+    border-radius: 1rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
 .terminal-card:hover {
     border-color: var(--border-highlight);
 }
 
+/* Glow Card Highlights */
+.glow-card {
+    position: relative;
+    overflow: hidden;
+}
+
+.glow-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent-cyan), transparent);
+    opacity: 0.8;
+}
+
+/* Radar Pulse Animation */
 .pulse-radar {
     display: inline-block;
     width: 8px;
@@ -85,22 +124,24 @@ body {
     }
 }
 
-/* TradingView Chart Container */
+/* Chart Container */
 #tv-chart-container {
     width: 100%;
-    height: 440px;
+    height: 460px;
     position: relative;
+    border-radius: 0.75rem;
+    overflow: hidden;
 }
 
 @media (max-width: 640px) {
     #tv-chart-container {
-        height: 320px;
+        height: 330px;
     }
 }
 
-/* Shimmer / Skeleton loader */
+/* Skeleton Loading Shimmer */
 .skeleton {
-    background: linear-gradient(90deg, #131d33 25%, #1c2b4d 50%, #131d33 75%);
+    background: linear-gradient(90deg, var(--bg-card) 25%, var(--bg-card-hover) 50%, var(--bg-card) 75%);
     background-size: 200% 100%;
     animation: shimmer 1.5s infinite;
 }
@@ -108,4 +149,13 @@ body {
 @keyframes shimmer {
     0% { background-position: 200% 0; }
     100% { background-position: -200% 0; }
+}
+
+/* Theme switch button icon transition */
+.theme-toggle-btn {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.theme-toggle-btn:hover {
+    transform: rotate(12deg) scale(1.05);
 }

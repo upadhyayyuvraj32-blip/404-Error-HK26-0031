@@ -1,9 +1,10 @@
 /**
  * TrendPulse AI - Main Frontend Dashboard Controller
- * Vanilla JavaScript implementation integrating:
- * - TradingView Lightweight Charts
+ * Full-featured interactive financial terminal:
+ * - TradingView Lightweight Charts (Candlesticks & Area)
  * - Chart.js Sentiment Visualizations
- * - Real-time Django REST API Endpoints
+ * - Dark & Light Mode Dynamic Theme Switching
+ * - AI Investment Advisory, Buy/Sell Signals, & Future Price Projections
  */
 
 // Application State
@@ -11,6 +12,7 @@ let currentTicker = typeof DEFAULT_TICKER !== 'undefined' ? DEFAULT_TICKER : 'RE
 let currentTimeRange = '1M';
 let currentChartType = 'candles';
 let currentMarketFilter = 'IN';
+let currentTheme = localStorage.getItem('trendpulse_theme') || 'dark';
 
 let tvChart = null;
 let candleSeries = null;
@@ -35,6 +37,7 @@ const POPULAR_TICKERS = [
 
 // Document Ready Initialization
 document.addEventListener('DOMContentLoaded', () => {
+    initTheme();
     initChart();
     initSearch();
     renderPopularChips();
@@ -52,11 +55,74 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 /* -------------------------------------------------------------
+ * 0. Dark / Light Mode Controller
+ * ------------------------------------------------------------- */
+function initTheme() {
+    const html = document.documentElement;
+    if (currentTheme === 'light') {
+        html.classList.remove('dark');
+        updateThemeIcons(false);
+    } else {
+        html.classList.add('dark');
+        updateThemeIcons(true);
+    }
+}
+
+function toggleThemeMode() {
+    const html = document.documentElement;
+    const isDark = html.classList.toggle('dark');
+    currentTheme = isDark ? 'dark' : 'light';
+    localStorage.setItem('trendpulse_theme', currentTheme);
+    updateThemeIcons(isDark);
+    applyThemeToCharts(isDark);
+}
+
+function updateThemeIcons(isDark) {
+    const sunIcon = document.getElementById('theme-icon');
+    const moonIcon = document.getElementById('theme-icon-moon');
+    if (sunIcon && moonIcon) {
+        if (isDark) {
+            sunIcon.classList.add('hidden');
+            moonIcon.classList.remove('hidden');
+        } else {
+            sunIcon.classList.remove('hidden');
+            moonIcon.classList.add('hidden');
+        }
+    }
+}
+
+function applyThemeToCharts(isDark) {
+    if (tvChart) {
+        tvChart.applyOptions({
+            layout: {
+                background: { type: 'solid', color: isDark ? '#070b16' : '#ffffff' },
+                textColor: isDark ? '#94a3b8' : '#475569',
+            },
+            grid: {
+                vertLines: { color: isDark ? '#1e293b' : '#f1f5f9' },
+                horzLines: { color: isDark ? '#1e293b' : '#f1f5f9' },
+            },
+            rightPriceScale: {
+                borderColor: isDark ? '#1e293b' : '#e2e8f0',
+            },
+            timeScale: {
+                borderColor: isDark ? '#1e293b' : '#e2e8f0',
+            },
+        });
+    }
+
+    if (sentimentDonutChart) {
+        sentimentDonutChart.data.datasets[0].borderColor = isDark ? '#0f172a' : '#ffffff';
+        sentimentDonutChart.update();
+    }
+}
+
+/* -------------------------------------------------------------
  * 1. Market Overview Indices (Feature A)
  * ------------------------------------------------------------- */
 async function refreshMarketOverview() {
     const timeElem = document.getElementById('indices-timestamp');
-    if (timeElem) timeElem.textContent = 'Updating quotes...';
+    if (timeElem) timeElem.textContent = 'Syncing quotes...';
 
     try {
         const res = await fetch('/api/market-overview/');
@@ -66,27 +132,29 @@ async function refreshMarketOverview() {
             data.data.forEach(idx => {
                 const isPos = idx.is_positive;
                 const sign = isPos ? '+' : '';
-                const changeClass = isPos ? 'text-emerald-400' : 'text-rose-400';
-                const badgeBg = isPos ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' : 'bg-rose-500/15 text-rose-300 border-rose-500/30';
+                const changeClass = isPos ? 'text-emerald-500 dark:text-emerald-400' : 'text-rose-500 dark:text-rose-400';
+                const badgeBg = isPos 
+                    ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/30' 
+                    : 'bg-rose-500/15 text-rose-600 dark:text-rose-300 border-rose-500/30';
 
                 if (idx.ticker === '^NSEI') {
                     setElemText('nifty-price', formatNumber(idx.price));
                     setElemText('nifty-change', `${sign}${formatNumber(idx.change)} (${sign}${idx.percent_change}%)`);
                     setElemClass('nifty-change', `text-xs mono-num font-semibold ${changeClass}`);
                     setElemText('nifty-badge', `${sign}${idx.percent_change}%`);
-                    setElemClass('nifty-badge', `px-2 py-0.5 text-xs font-semibold rounded border ${badgeBg}`);
+                    setElemClass('nifty-badge', `px-2 py-0.5 text-xs font-bold rounded-lg border ${badgeBg}`);
                 } else if (idx.ticker === '^BSESN') {
                     setElemText('sensex-price', formatNumber(idx.price));
                     setElemText('sensex-change', `${sign}${formatNumber(idx.change)} (${sign}${idx.percent_change}%)`);
                     setElemClass('sensex-change', `text-xs mono-num font-semibold ${changeClass}`);
                     setElemText('sensex-badge', `${sign}${idx.percent_change}%`);
-                    setElemClass('sensex-badge', `px-2 py-0.5 text-xs font-semibold rounded border ${badgeBg}`);
+                    setElemClass('sensex-badge', `px-2 py-0.5 text-xs font-bold rounded-lg border ${badgeBg}`);
                 } else if (idx.ticker === '^GSPC') {
                     setElemText('sp500-price', formatNumber(idx.price));
                     setElemText('sp500-change', `${sign}${formatNumber(idx.change)} (${sign}${idx.percent_change}%)`);
                     setElemClass('sp500-change', `text-xs mono-num font-semibold ${changeClass}`);
                     setElemText('sp500-badge', `${sign}${idx.percent_change}%`);
-                    setElemClass('sp500-badge', `px-2 py-0.5 text-xs font-semibold rounded border ${badgeBg}`);
+                    setElemClass('sp500-badge', `px-2 py-0.5 text-xs font-bold rounded-lg border ${badgeBg}`);
                 }
             });
 
@@ -97,7 +165,7 @@ async function refreshMarketOverview() {
         }
     } catch (err) {
         console.error('Error fetching market overview:', err);
-        if (timeElem) timeElem.textContent = 'Data delayed';
+        if (timeElem) timeElem.textContent = 'Quotes delayed';
     }
 }
 
@@ -122,7 +190,7 @@ async function loadStockData(ticker) {
     // 2. Fetch Chart Series
     await loadStockHistory(ticker, currentTimeRange);
 
-    // 3. Fetch Sentiment Consensus
+    // 3. Fetch Sentiment Consensus & AI Advisory
     await loadSentimentSummary(ticker);
 
     // 4. Fetch News Feed
@@ -150,8 +218,8 @@ async function loadStockQuote(ticker) {
             const changeElem = document.getElementById('stock-price-change');
             if (changeElem) {
                 changeElem.className = isPos 
-                    ? 'text-xs sm:text-sm mono-num font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                    : 'text-xs sm:text-sm mono-num font-bold px-2 py-0.5 rounded bg-rose-500/15 text-rose-400 border border-rose-500/30';
+                    ? 'text-xs sm:text-sm mono-num font-bold px-2 py-0.5 rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                    : 'text-xs sm:text-sm mono-num font-bold px-2 py-0.5 rounded-lg bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30';
             }
 
             setElemText('stock-day-range', `${currencySymbol}${formatNumber(q.day_low)} - ${currencySymbol}${formatNumber(q.day_high)}`);
@@ -172,21 +240,22 @@ function initChart() {
     const container = document.getElementById('tv-chart-container');
     if (!container || !window.LightweightCharts) return;
 
-    // Reset container contents
-    container.innerHTML = '<div id="chart-loader" class="hidden absolute inset-0 bg-dark-900/80 backdrop-blur-sm flex flex-col items-center justify-center z-10"><i class="ph ph-spinner animate-spin text-3xl text-accent mb-2"></i><span class="text-xs text-slate-300 font-medium">Loading candles...</span></div>';
+    container.innerHTML = '<div id="chart-loader" class="hidden absolute inset-0 bg-white/80 dark:bg-dark-900/80 backdrop-blur-sm flex flex-col items-center justify-center z-10"><i class="ph ph-spinner animate-spin text-3xl text-sky-500 dark:text-accent mb-2"></i><span class="text-xs text-slate-600 dark:text-slate-300 font-semibold">Loading candles...</span></div>';
+
+    const isDark = document.documentElement.classList.contains('dark');
 
     tvChart = LightweightCharts.createChart(container, {
         width: container.clientWidth,
         height: container.clientHeight,
         layout: {
-            background: { type: 'solid', color: '#070a12' },
-            textColor: '#94a3b8',
+            background: { type: 'solid', color: isDark ? '#070b16' : '#ffffff' },
+            textColor: isDark ? '#94a3b8' : '#475569',
             fontSize: 12,
             fontFamily: 'Inter, sans-serif',
         },
         grid: {
-            vertLines: { color: '#131d33', style: 1 },
-            horzLines: { color: '#131d33', style: 1 },
+            vertLines: { color: isDark ? '#1e293b' : '#f1f5f9', style: 1 },
+            horzLines: { color: isDark ? '#1e293b' : '#f1f5f9', style: 1 },
         },
         crosshair: {
             mode: LightweightCharts.CrosshairMode.Normal,
@@ -194,21 +263,21 @@ function initChart() {
                 color: '#38bdf8',
                 width: 1,
                 style: 3,
-                labelBackgroundColor: '#1e293b',
+                labelBackgroundColor: '#0f172a',
             },
             horzLine: {
                 color: '#38bdf8',
                 width: 1,
                 style: 3,
-                labelBackgroundColor: '#1e293b',
+                labelBackgroundColor: '#0f172a',
             },
         },
         rightPriceScale: {
-            borderColor: '#1e2c4a',
+            borderColor: isDark ? '#1e293b' : '#e2e8f0',
             autoScale: true,
         },
         timeScale: {
-            borderColor: '#1e2c4a',
+            borderColor: isDark ? '#1e293b' : '#e2e8f0',
             timeVisible: true,
             secondsVisible: false,
         },
@@ -237,7 +306,7 @@ function initChart() {
         wickDownColor: '#f43f5e',
     });
 
-    // Area Series (hidden initially)
+    // Area Series
     areaSeries = tvChart.addAreaSeries({
         topColor: 'rgba(56, 189, 248, 0.4)',
         bottomColor: 'rgba(56, 189, 248, 0.0)',
@@ -272,7 +341,6 @@ async function loadStockHistory(ticker, range) {
                 candleSeries.setData(candles);
                 volumeSeries.setData(volumes);
 
-                // Format for area chart as well
                 const areaData = candles.map(c => ({ time: c.time, value: c.close }));
                 areaSeries.setData(areaData);
 
@@ -281,7 +349,7 @@ async function loadStockHistory(ticker, range) {
 
             const tsElem = document.getElementById('chart-data-timestamp');
             if (tsElem) {
-                tsElem.textContent = `Range: ${range} • ${candles.length} Data Points • Currency: ${data.currency}`;
+                tsElem.textContent = `Range: ${range} • ${candles.length} Candles • Currency: ${data.currency}`;
             }
         }
     } catch (err) {
@@ -301,15 +369,15 @@ function toggleChartType(type) {
         volumeSeries.applyOptions({ visible: true });
         areaSeries.applyOptions({ visible: false });
 
-        btnCandles.className = 'px-2 py-1 rounded bg-dark-700 text-accent font-medium';
-        btnArea.className = 'px-2 py-1 rounded text-slate-400 hover:text-white';
+        btnCandles.className = 'px-2.5 py-1 rounded-lg bg-white dark:bg-dark-700 text-sky-600 dark:text-accent shadow-sm';
+        btnArea.className = 'px-2.5 py-1 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white';
     } else {
         candleSeries.applyOptions({ visible: false });
         volumeSeries.applyOptions({ visible: false });
         areaSeries.applyOptions({ visible: true });
 
-        btnArea.className = 'px-2 py-1 rounded bg-dark-700 text-accent font-medium';
-        btnCandles.className = 'px-2 py-1 rounded text-slate-400 hover:text-white';
+        btnArea.className = 'px-2.5 py-1 rounded-lg bg-white dark:bg-dark-700 text-sky-600 dark:text-accent shadow-sm';
+        btnCandles.className = 'px-2.5 py-1 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white';
     }
 }
 
@@ -318,9 +386,9 @@ function setupTimeframeButtons() {
     buttons.forEach(btn => {
         btn.addEventListener('click', () => {
             buttons.forEach(b => {
-                b.className = 'timeframe-btn px-2.5 py-1 rounded hover:bg-dark-700 transition text-slate-300';
+                b.className = 'timeframe-btn px-2.5 py-1 rounded-lg hover:bg-light-200 dark:hover:bg-dark-700 transition text-slate-600 dark:text-slate-300';
             });
-            btn.className = 'timeframe-btn px-2.5 py-1 rounded bg-accent text-dark-900 font-bold shadow transition';
+            btn.className = 'timeframe-btn px-2.5 py-1 rounded-lg bg-sky-500 dark:bg-accent text-white dark:text-dark-950 font-extrabold shadow transition';
 
             currentTimeRange = btn.getAttribute('data-range');
             loadStockHistory(currentTicker, currentTimeRange);
@@ -332,13 +400,13 @@ function showChartLoader(show) {
     const loader = document.getElementById('chart-loader');
     if (loader) {
         loader.className = show
-            ? 'absolute inset-0 bg-dark-900/80 backdrop-blur-sm flex flex-col items-center justify-center z-10'
+            ? 'absolute inset-0 bg-white/80 dark:bg-dark-900/80 backdrop-blur-sm flex flex-col items-center justify-center z-10'
             : 'hidden';
     }
 }
 
 /* -------------------------------------------------------------
- * 4. AI Sentiment Intelligence & Chart.js Donut (Feature D)
+ * 4. AI Sentiment Intelligence & Stock Advisory Analysis
  * ------------------------------------------------------------- */
 async function loadSentimentSummary(ticker) {
     try {
@@ -348,48 +416,106 @@ async function loadSentimentSummary(ticker) {
         if (json.status === 'success' && json.data) {
             const data = json.data;
             const m = data.metrics;
+            const inv = data.investment_analysis;
 
-            // Update Bullish Index (0 to 100)
+            // 1. Update Bullish Index (0 to 100)
             setElemText('bullish-index-val', m.bullish_index);
             const gaugeBar = document.getElementById('bullish-gauge-bar');
             if (gaugeBar) {
                 gaugeBar.style.width = `${Math.min(Math.max(m.bullish_index, 5), 100)}%`;
             }
 
-            // Verdict Chip
+            // 2. Verdict Chip
             const verdictElem = document.getElementById('sentiment-verdict-badge');
             if (verdictElem) {
                 verdictElem.textContent = m.sentiment_verdict;
                 if (m.sentiment_verdict.includes('Bullish')) {
-                    verdictElem.className = 'inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30';
+                    verdictElem.className = 'inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30';
                 } else if (m.sentiment_verdict.includes('Bearish')) {
-                    verdictElem.className = 'inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-full bg-rose-500/15 text-rose-300 border border-rose-500/30';
+                    verdictElem.className = 'inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-full bg-rose-500/15 text-rose-600 dark:text-rose-300 border border-rose-500/30';
                 } else {
-                    verdictElem.className = 'inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-full bg-dark-700 text-slate-200 border border-dark-600';
+                    verdictElem.className = 'inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-full bg-light-200 dark:bg-dark-700 text-slate-800 dark:text-slate-200 border border-light-300 dark:border-dark-600';
                 }
             }
 
-            // Polarity & Confidence
+            // 3. Polarity & Confidence
             const sign = m.average_score > 0 ? '+' : '';
             setElemText('compound-polarity-val', `${sign}${m.average_score}`);
             setElemText('avg-confidence-val', `${Math.round(m.average_confidence * 100)}%`);
             setElemText('news-sample-count', `${m.total_articles} articles analyzed`);
 
-            // Distribution percentages
+            // 4. Distribution percentages
             setElemText('pct-positive', `${m.positive_pct}%`);
             setElemText('pct-neutral', `${m.neutral_pct}%`);
             setElemText('pct-negative', `${m.negative_pct}%`);
 
-            // Sentiment vs Price Alignment Text
+            // 5. Sentiment vs Price Alignment Text
             const alignElem = document.getElementById('sentiment-alignment-text');
             if (alignElem) {
                 const badge = data.alignment_badge;
-                let badgeColor = badge === 'aligned' ? 'text-emerald-400' : (badge === 'divergent' ? 'text-amber-400' : 'text-slate-300');
+                let badgeColor = badge === 'aligned' ? 'text-emerald-500 dark:text-emerald-400' : (badge === 'divergent' ? 'text-amber-500 dark:text-amber-400' : 'text-slate-600 dark:text-slate-300');
                 alignElem.innerHTML = `<span class="font-bold ${badgeColor}">${data.sentiment_price_alignment}</span>. In the last observation window, the stock price change is <span class="font-mono font-semibold">${data.price_change_pct}%</span> while aggregate news polarity is <span class="font-mono font-semibold">${m.average_score}</span>.`;
             }
 
-            // Render Donut Chart
+            // 6. Render Donut Chart
             updateSentimentDonut(m.positive_pct, m.neutral_pct, m.negative_pct);
+
+            // ========================================================
+            // 7. Update AI Investment Advisory & Price Targets (NEW)
+            // ========================================================
+            if (inv) {
+                // Verdict Banner & Timing
+                setElemText('advisory-verdict', inv.verdict);
+                const advVerdict = document.getElementById('advisory-verdict');
+                if (advVerdict) {
+                    if (inv.badge_color === 'emerald') {
+                        advVerdict.className = 'text-2xl sm:text-3xl font-black text-emerald-500';
+                    } else if (inv.badge_color === 'teal') {
+                        advVerdict.className = 'text-2xl sm:text-3xl font-black text-sky-500 dark:text-accent';
+                    } else if (inv.badge_color === 'rose') {
+                        advVerdict.className = 'text-2xl sm:text-3xl font-black text-rose-500';
+                    } else {
+                        advVerdict.className = 'text-2xl sm:text-3xl font-black text-amber-500';
+                    }
+                }
+
+                setElemText('advisory-timing-badge', inv.timing_badge);
+                setElemText('range-position-val', `${inv.fifty_two_week_position_pct}%`);
+                const posBar = document.getElementById('range-position-bar');
+                if (posBar) {
+                    posBar.style.width = `${inv.fifty_two_week_position_pct}%`;
+                }
+
+                // Buy Action Details (Hindi + English clarity)
+                setElemText('advisory-action-hi', `${inv.action_detail_hi} (${inv.action_detail_en})`);
+                setElemText('advisory-entry-timing', inv.best_time_to_buy);
+
+                // Future Projected Targets
+                const proj = inv.projections;
+                const sym = inv.currency_symbol;
+                if (proj) {
+                    setElemText('target-base-price', `${sym}${formatNumber(proj.base_case.target)}`);
+                    setElemText('target-base-upside', `+${proj.base_case.upside_pct}% Upside`);
+
+                    setElemText('target-bull-price', `${sym}${formatNumber(proj.bull_case.target)}`);
+                    setElemText('target-bull-upside', `+${proj.bull_case.upside_pct}% Upside`);
+
+                    setElemText('target-bear-price', `${sym}${formatNumber(proj.bear_case.target)}`);
+                    setElemText('target-bear-downside', `${proj.bear_case.downside_pct}% Downside`);
+                }
+
+                // Catalysts
+                const catList = document.getElementById('advisory-catalysts-list');
+                if (catList && inv.catalysts) {
+                    catList.innerHTML = inv.catalysts.map(c => `<li class="leading-relaxed font-medium">${escapeHtml(c)}</li>`).join('');
+                }
+
+                // Risks
+                const riskList = document.getElementById('advisory-risks-list');
+                if (riskList && inv.risks) {
+                    riskList.innerHTML = inv.risks.map(r => `<li class="leading-relaxed font-medium">${escapeHtml(r)}</li>`).join('');
+                }
+            }
         }
     } catch (err) {
         console.error('Error fetching sentiment summary:', err);
@@ -404,7 +530,9 @@ function updateSentimentDonut(pos, neu, neg) {
         sentimentDonutChart.destroy();
     }
 
+    const isDark = document.documentElement.classList.contains('dark');
     const ctx = canvas.getContext('2d');
+    
     sentimentDonutChart = new Chart(ctx, {
         type: 'doughnut',
         data: {
@@ -417,7 +545,7 @@ function updateSentimentDonut(pos, neu, neg) {
                     '#f43f5e', // rose
                 ],
                 borderWidth: 2,
-                borderColor: '#0e1526',
+                borderColor: isDark ? '#0f172a' : '#ffffff',
                 hoverOffset: 4,
             }]
         },
@@ -444,7 +572,6 @@ async function loadStockNews(ticker) {
     const container = document.getElementById('news-feed-container');
     if (!container) return;
 
-    // Show skeletons
     container.innerHTML = `
         <div class="terminal-card p-4 skeleton h-36"></div>
         <div class="terminal-card p-4 skeleton h-36"></div>
@@ -459,36 +586,36 @@ async function loadStockNews(ticker) {
             container.innerHTML = '';
             json.data.forEach(item => {
                 const label = item.sentiment_label.toLowerCase();
-                let badgeClass = 'bg-slate-500/15 text-slate-300 border-slate-500/30';
+                let badgeClass = 'bg-slate-500/15 text-slate-700 dark:text-slate-300 border-slate-500/30';
                 let iconClass = 'ph-minus text-slate-400';
 
                 if (label === 'positive') {
-                    badgeClass = 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
-                    iconClass = 'ph-arrow-up-right text-emerald-400';
+                    badgeClass = 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/30';
+                    iconClass = 'ph-arrow-up-right text-emerald-500';
                 } else if (label === 'negative') {
-                    badgeClass = 'bg-rose-500/15 text-rose-300 border-rose-500/30';
-                    iconClass = 'ph-arrow-down-right text-rose-400';
+                    badgeClass = 'bg-rose-500/15 text-rose-600 dark:text-rose-300 border-rose-500/30';
+                    iconClass = 'ph-arrow-down-right text-rose-500';
                 }
 
                 const card = document.createElement('div');
-                card.className = 'terminal-card p-4 flex flex-col justify-between hover:border-dark-500 transition';
+                card.className = 'terminal-card p-4 flex flex-col justify-between hover:shadow-md transition bg-white dark:bg-dark-850 border border-light-200 dark:border-dark-700';
                 card.innerHTML = `
                     <div>
                         <div class="flex items-center justify-between gap-2 mb-2">
-                            <span class="text-[11px] font-semibold text-slate-400 flex items-center gap-1">
-                                <i class="ph ph-newspaper"></i> ${escapeHtml(item.publisher || 'Financial Press')}
+                            <span class="text-[11px] font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                                <i class="ph ph-newspaper text-sky-500"></i> ${escapeHtml(item.publisher || 'Financial Press')}
                             </span>
-                            <span class="px-2 py-0.5 text-[10px] font-bold uppercase rounded border flex items-center gap-1 ${badgeClass}">
+                            <span class="px-2 py-0.5 text-[10px] font-bold uppercase rounded-md border flex items-center gap-1 ${badgeClass}">
                                 <i class="ph-bold ${iconClass}"></i> ${item.sentiment_label} (${item.confidence_pct}%)
                             </span>
                         </div>
-                        <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer" class="text-xs sm:text-sm font-semibold text-white hover:text-accent line-clamp-2 leading-snug transition">
+                        <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer" class="text-xs sm:text-sm font-bold text-slate-900 dark:text-white hover:text-sky-500 dark:hover:text-accent line-clamp-2 leading-snug transition">
                             ${escapeHtml(item.headline)}
                         </a>
                     </div>
-                    <div class="mt-4 pt-2 border-t border-dark-600 flex items-center justify-between text-[10px] text-slate-500">
+                    <div class="mt-4 pt-2.5 border-t border-light-200 dark:border-dark-700 flex items-center justify-between text-[10px] text-slate-400 font-medium">
                         <span>${item.published_at_display}</span>
-                        <span class="text-accent hover:underline flex items-center gap-0.5">
+                        <span class="text-sky-600 dark:text-accent hover:underline flex items-center gap-0.5 font-semibold">
                             Source Link <i class="ph ph-arrow-square-out"></i>
                         </span>
                     </div>
@@ -497,16 +624,16 @@ async function loadStockNews(ticker) {
             });
         } else {
             container.innerHTML = `
-                <div class="col-span-full p-8 text-center terminal-card">
-                    <i class="ph ph-newspaper-clipping text-3xl text-slate-500 mb-2 inline-block"></i>
-                    <p class="text-xs text-slate-400">No recent articles found for this ticker. Monitoring financial feeds...</p>
+                <div class="col-span-full p-8 text-center terminal-card bg-white dark:bg-dark-850">
+                    <i class="ph ph-newspaper-clipping text-3xl text-slate-400 mb-2 inline-block"></i>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">No recent articles found for this ticker. Monitoring financial feeds...</p>
                 </div>
             `;
         }
     } catch (err) {
         console.error('Error fetching news:', err);
         container.innerHTML = `
-            <div class="col-span-full p-6 text-center terminal-card text-rose-400 text-xs">
+            <div class="col-span-full p-6 text-center terminal-card text-rose-500 text-xs">
                 Unable to load financial news feed. Please verify network connectivity.
             </div>
         `;
@@ -542,25 +669,27 @@ async function loadAlerts() {
             alerts.forEach(a => {
                 const dir = a.direction;
                 const isBull = dir === 'BULLISH';
-                const pillBg = isBull ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' : 'bg-rose-500/15 text-rose-300 border-rose-500/30';
+                const pillBg = isBull 
+                    ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/30' 
+                    : 'bg-rose-500/15 text-rose-600 dark:text-rose-300 border-rose-500/30';
                 const pillIcon = isBull ? 'ph-trend-up' : 'ph-trend-down';
 
                 const alertDiv = document.createElement('div');
-                alertDiv.className = 'p-3 rounded-lg bg-dark-800 border border-dark-600 hover:border-dark-500 transition cursor-pointer';
+                alertDiv.className = 'p-3 rounded-xl bg-light-100 dark:bg-dark-800 border border-light-200 dark:border-dark-700 hover:shadow-md transition cursor-pointer';
                 alertDiv.onclick = () => selectStock(a.ticker);
                 alertDiv.innerHTML = `
                     <div class="flex items-center justify-between gap-2 mb-1.5">
                         <div class="flex items-center gap-1.5">
-                            <span class="font-bold text-xs text-white">${escapeHtml(a.company_name)}</span>
-                            <span class="text-[10px] text-slate-400 font-mono">(${a.ticker})</span>
+                            <span class="font-bold text-xs text-slate-900 dark:text-white">${escapeHtml(a.company_name)}</span>
+                            <span class="text-[10px] text-slate-500 dark:text-slate-400 font-mono">(${a.ticker})</span>
                         </div>
-                        <span class="px-1.5 py-0.5 text-[10px] font-bold rounded border uppercase flex items-center gap-1 ${pillBg}">
+                        <span class="px-2 py-0.5 text-[10px] font-bold rounded-md border uppercase flex items-center gap-1 ${pillBg}">
                             <i class="ph-bold ${pillIcon}"></i> ${a.alert_type.replace('_', ' ')}
                         </span>
                     </div>
-                    <p class="text-[11px] text-slate-300 leading-relaxed mb-2">${escapeHtml(a.explanation)}</p>
-                    <div class="flex items-center justify-between text-[10px] text-slate-500 border-t border-dark-700/60 pt-1.5">
-                        <span>Score Shift: <b class="font-mono text-slate-300">${a.previous_score} → ${a.current_score}</b></span>
+                    <p class="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed mb-2 font-medium">${escapeHtml(a.explanation)}</p>
+                    <div class="flex items-center justify-between text-[10px] text-slate-400 border-t border-light-200 dark:border-dark-700 pt-1.5">
+                        <span>Score Shift: <b class="font-mono text-slate-700 dark:text-slate-200">${a.previous_score} → ${a.current_score}</b></span>
                         <span>${a.time_ago}</span>
                     </div>
                 `;
@@ -589,40 +718,40 @@ async function loadCompanyComparison() {
             json.data.forEach(item => {
                 const isPos = item.is_positive;
                 const sign = isPos ? '+' : '';
-                const changeColor = isPos ? 'text-emerald-400' : 'text-rose-400';
+                const changeColor = isPos ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400';
                 const currSymbol = item.currency === 'INR' ? '₹' : '$';
 
                 const tr = document.createElement('tr');
-                tr.className = 'hover:bg-dark-800/60 transition';
+                tr.className = 'hover:bg-light-100 dark:hover:bg-dark-800 transition';
                 tr.innerHTML = `
                     <td class="py-2.5 px-3">
-                        <div class="font-bold text-white text-xs">${escapeHtml(item.name)}</div>
-                        <div class="text-[10px] text-slate-400 font-mono">${item.ticker} • ${item.exchange}</div>
+                        <div class="font-bold text-slate-900 dark:text-white text-xs">${escapeHtml(item.name)}</div>
+                        <div class="text-[10px] text-slate-500 dark:text-slate-400 font-mono">${item.ticker} • ${item.exchange}</div>
                     </td>
-                    <td class="py-2.5 px-3 text-right font-mono font-semibold text-white">
+                    <td class="py-2.5 px-3 text-right font-mono font-bold text-slate-900 dark:text-white">
                         ${currSymbol}${formatNumber(item.price)}
                     </td>
                     <td class="py-2.5 px-3 text-right font-mono font-bold ${changeColor}">
                         ${sign}${item.change_pct}%
                     </td>
                     <td class="py-2.5 px-3 text-center">
-                        <span class="px-2 py-0.5 rounded text-[10px] font-bold ${item.sentiment_verdict.includes('Bullish') ? 'bg-emerald-500/15 text-emerald-300' : (item.sentiment_verdict.includes('Bearish') ? 'bg-rose-500/15 text-rose-300' : 'bg-dark-700 text-slate-300')}">
+                        <span class="px-2 py-0.5 rounded-md text-[10px] font-bold ${item.sentiment_verdict.includes('Bullish') ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300' : (item.sentiment_verdict.includes('Bearish') ? 'bg-rose-500/15 text-rose-600 dark:text-rose-300' : 'bg-light-200 dark:bg-dark-700 text-slate-700 dark:text-slate-300')}">
                             ${item.sentiment_verdict}
                         </span>
                     </td>
                     <td class="py-2.5 px-3 text-center">
-                        <div class="w-28 mx-auto bg-dark-700 rounded-full h-1.5 flex overflow-hidden">
+                        <div class="w-28 mx-auto bg-light-200 dark:bg-dark-700 rounded-full h-1.5 flex overflow-hidden">
                             <div class="bg-emerald-400 h-1.5" style="width: ${item.positive_pct}%"></div>
                             <div class="bg-slate-400 h-1.5" style="width: ${item.neutral_pct}%"></div>
                             <div class="bg-rose-500 h-1.5" style="width: ${item.negative_pct}%"></div>
                         </div>
-                        <span class="text-[9px] text-slate-400 mt-1 block">${item.positive_pct}% / ${item.neutral_pct}% / ${item.negative_pct}%</span>
+                        <span class="text-[9px] text-slate-500 dark:text-slate-400 mt-1 block">${item.positive_pct}% / ${item.neutral_pct}% / ${item.negative_pct}%</span>
                     </td>
-                    <td class="py-2.5 px-3 text-center font-mono text-slate-300">
+                    <td class="py-2.5 px-3 text-center font-mono font-semibold text-slate-700 dark:text-slate-300">
                         ${item.article_count}
                     </td>
                     <td class="py-2.5 px-3 text-center">
-                        <button onclick="selectStock('${item.ticker}')" class="px-2.5 py-1 text-[11px] font-semibold bg-dark-700 hover:bg-accent hover:text-dark-900 text-slate-200 rounded transition">
+                        <button onclick="selectStock('${item.ticker}')" class="px-2.5 py-1 text-[11px] font-bold bg-light-100 dark:bg-dark-700 hover:bg-sky-500 dark:hover:bg-accent hover:text-white dark:hover:text-dark-950 text-slate-700 dark:text-slate-200 rounded-lg transition shadow-sm">
                             Analyze
                         </button>
                     </td>
@@ -651,7 +780,6 @@ function initSearch() {
         mobileInput.addEventListener('input', (e) => handleSearchInput(e.target.value, 'mobile-search-dropdown'));
     }
 
-    // Close on outside click
     document.addEventListener('click', (e) => {
         if (!e.target.closest('#global-search-input') && !e.target.closest('#search-dropdown')) {
             hideSearchDropdowns();
@@ -673,20 +801,20 @@ function handleSearchInput(val, dropdownId) {
                 dropdown.innerHTML = '';
                 json.data.forEach(item => {
                     const div = document.createElement('div');
-                    div.className = 'px-4 py-2.5 hover:bg-dark-700 cursor-pointer flex items-center justify-between border-b border-dark-600/40 text-xs transition';
+                    div.className = 'px-4 py-2.5 hover:bg-light-100 dark:hover:bg-dark-700 cursor-pointer flex items-center justify-between border-b border-light-200 dark:border-dark-700/60 text-xs transition';
                     div.onclick = () => selectStock(item.ticker);
                     div.innerHTML = `
                         <div>
-                            <span class="font-bold text-white">${escapeHtml(item.name)}</span>
-                            <span class="ml-2 text-accent font-mono text-[11px]">${item.ticker}</span>
+                            <span class="font-bold text-slate-900 dark:text-white">${escapeHtml(item.name)}</span>
+                            <span class="ml-2 text-sky-600 dark:text-accent font-mono text-[11px] font-bold">${item.ticker}</span>
                         </div>
-                        <span class="text-[10px] text-slate-400 bg-dark-900 px-1.5 py-0.5 rounded">${item.exchange}</span>
+                        <span class="text-[10px] text-slate-500 bg-light-200 dark:bg-dark-900 px-2 py-0.5 rounded font-semibold">${item.exchange}</span>
                     `;
                     dropdown.appendChild(div);
                 });
                 dropdown.classList.remove('hidden');
             } else {
-                dropdown.innerHTML = '<div class="p-3 text-xs text-slate-400 text-center">No matching tickers found. Press Enter to lookup anyway.</div>';
+                dropdown.innerHTML = '<div class="p-3 text-xs text-slate-500 text-center">No matching tickers found. Press Enter to lookup anyway.</div>';
                 dropdown.classList.remove('hidden');
             }
         } catch (err) {
@@ -728,10 +856,10 @@ function updateWatchlistBtnState(isWatchlist) {
     if (btnText && starIcon) {
         if (isWatchlist) {
             btnText.textContent = 'In Watchlist';
-            starIcon.className = 'ph-fill ph-star text-amber-400';
+            starIcon.className = 'ph-fill ph-star text-amber-500';
         } else {
             btnText.textContent = 'Add to Watchlist';
-            starIcon.className = 'ph ph-star text-amber-400';
+            starIcon.className = 'ph ph-star text-amber-500';
         }
     }
 }
@@ -753,7 +881,7 @@ async function openWatchlistModal() {
     const container = document.getElementById('watchlist-modal-content');
     if (!modal || !container) return;
 
-    container.innerHTML = '<div class="text-center p-4 text-xs text-slate-400">Loading watchlist...</div>';
+    container.innerHTML = '<div class="text-center p-4 text-xs text-slate-500">Loading watchlist...</div>';
     modal.classList.remove('hidden');
 
     try {
@@ -764,15 +892,15 @@ async function openWatchlistModal() {
             container.innerHTML = '';
             json.data.forEach(item => {
                 const div = document.createElement('div');
-                div.className = 'flex items-center justify-between p-2.5 rounded-lg bg-dark-900 border border-dark-600 hover:border-dark-500 transition';
+                div.className = 'flex items-center justify-between p-2.5 rounded-xl bg-light-100 dark:bg-dark-900 border border-light-200 dark:border-dark-700 hover:border-sky-500 transition';
                 div.innerHTML = `
                     <div class="cursor-pointer" onclick="selectStock('${item.ticker}'); closeWatchlistModal();">
-                        <div class="font-bold text-white text-xs">${escapeHtml(item.name)}</div>
-                        <div class="text-[10px] text-accent font-mono">${item.ticker} (${item.exchange})</div>
+                        <div class="font-bold text-slate-900 dark:text-white text-xs">${escapeHtml(item.name)}</div>
+                        <div class="text-[10px] text-sky-600 dark:text-accent font-mono font-bold">${item.ticker} (${item.exchange})</div>
                     </div>
                     <div class="flex items-center gap-3">
-                        <span class="font-mono text-xs font-bold text-white">${formatNumber(item.price)}</span>
-                        <button onclick="removeFromWatchlist('${item.ticker}')" title="Remove" class="text-rose-400 hover:text-rose-300 p-1">
+                        <span class="font-mono text-xs font-bold text-slate-900 dark:text-white">${formatNumber(item.price)}</span>
+                        <button onclick="removeFromWatchlist('${item.ticker}')" title="Remove" class="text-rose-500 hover:text-rose-400 p-1">
                             <i class="ph ph-trash"></i>
                         </button>
                     </div>
@@ -780,10 +908,10 @@ async function openWatchlistModal() {
                 container.appendChild(div);
             });
         } else {
-            container.innerHTML = '<div class="text-center p-6 text-xs text-slate-400">Your watchlist is currently empty. Click "Add to Watchlist" on any stock to track it here.</div>';
+            container.innerHTML = '<div class="text-center p-6 text-xs text-slate-500">Your watchlist is currently empty. Click "Add to Watchlist" on any stock to track it here.</div>';
         }
     } catch (err) {
-        container.innerHTML = '<div class="text-center p-4 text-xs text-rose-400">Error loading watchlist.</div>';
+        container.innerHTML = '<div class="text-center p-4 text-xs text-rose-500">Error loading watchlist.</div>';
     }
 }
 
@@ -798,7 +926,7 @@ async function removeFromWatchlist(ticker) {
 }
 
 /* -------------------------------------------------------------
- * 10. UI Helpers
+ * 10. Helpers & UI Chips
  * ------------------------------------------------------------- */
 function renderPopularChips() {
     const container = document.getElementById('popular-chips-container');
@@ -807,7 +935,7 @@ function renderPopularChips() {
     container.innerHTML = '';
     POPULAR_TICKERS.forEach(item => {
         const chip = document.createElement('button');
-        chip.className = 'px-2.5 py-1 rounded bg-dark-800 hover:bg-dark-700 border border-dark-600 text-slate-300 whitespace-nowrap text-[11px] font-medium transition';
+        chip.className = 'px-3 py-1 rounded-lg bg-light-100 dark:bg-dark-800 hover:bg-light-200 dark:hover:bg-dark-700 border border-light-200 dark:border-dark-700 text-slate-700 dark:text-slate-300 whitespace-nowrap text-[11px] font-bold transition shadow-sm';
         chip.textContent = `${item.name} (${item.ticker.replace('.NS', '')})`;
         chip.onclick = () => selectStock(item.ticker);
         container.appendChild(chip);
@@ -820,12 +948,12 @@ function switchMarketFilter(market) {
     const btnUs = document.getElementById('btn-market-us');
 
     if (market === 'IN') {
-        btnIn.className = 'px-2.5 py-1 rounded bg-dark-700 text-accent font-semibold transition';
-        btnUs.className = 'px-2.5 py-1 rounded text-slate-400 hover:text-slate-200 transition';
+        btnIn.className = 'px-2.5 py-1 rounded-lg bg-white dark:bg-dark-700 text-sky-600 dark:text-accent shadow-sm transition';
+        btnUs.className = 'px-2.5 py-1 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition';
         selectStock('RELIANCE.NS');
     } else {
-        btnUs.className = 'px-2.5 py-1 rounded bg-dark-700 text-accent font-semibold transition';
-        btnIn.className = 'px-2.5 py-1 rounded text-slate-400 hover:text-slate-200 transition';
+        btnUs.className = 'px-2.5 py-1 rounded-lg bg-white dark:bg-dark-700 text-sky-600 dark:text-accent shadow-sm transition';
+        btnIn.className = 'px-2.5 py-1 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition';
         selectStock('AAPL');
     }
 }
