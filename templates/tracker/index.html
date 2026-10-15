@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TrendPulse AI | Stock Market Sentiment Tracker</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        dark: {
+                            900: '#070a12',
+                            800: '#0e1526',
+                            700: '#131d33',
+                            600: '#1e2c4a',
+                            500: '#2c3e66',
+                        },
+                        bullish: '#10b981',
+                        bearish: '#f43f5e',
+                        accent: '#38bdf8',
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- TradingView Lightweight Charts -->
+    <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+    <!-- Chart.js for Sentiment Visualizations -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body class="bg-dark-900 text-slate-100 min-h-screen flex flex-col antialiased selection:bg-accent selection:text-dark-900">
+
+    <!-- Top Navigation Bar -->
+    <header class="sticky top-0 z-50 bg-dark-900/90 backdrop-blur-md border-b border-dark-600 px-4 lg:px-8 py-3">
+        <div class="max-w-7xl mx-auto flex items-center justify-between gap-4">
+            
+            <!-- Brand Logo -->
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+                    <i class="ph-bold ph-chart-polar text-2xl text-white"></i>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xl font-bold tracking-tight text-white">Trend<span class="text-accent">Pulse</span></span>
+                        <span class="px-1.5 py-0.5 text-[10px] font-semibold tracking-wider uppercase bg-accent/15 text-accent rounded border border-accent/30">AI Live</span>
+                    </div>
+                    <p class="text-[11px] text-slate-400 hidden sm:block">Market Sentiment & Financial Intelligence</p>
+                </div>
+            </div>
+
+            <!-- Global Stock Search -->
+            <div class="relative flex-1 max-w-md hidden md:block">
+                <div class="relative">
+                    <i class="ph ph-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-lg"></i>
+                    <input 
+                        type="text" 
+                        id="global-search-input" 
+                        placeholder="Search stock by name or ticker (e.g. RELIANCE, TCS, AAPL, NVDA)..."
+                        class="w-full bg-dark-800 border border-dark-600 rounded-lg pl-10 pr-4 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition"
+                        autocomplete="off"
+                    >
+                    <span id="search-spinner" class="hidden absolute right-3 top-1/2 -translate-y-1/2">
+                        <i class="ph ph-spinner animate-spin text-accent"></i>
+                    </span>
+                </div>
+                <!-- Search Suggestions Dropdown -->
+                <div id="search-dropdown" class="hidden absolute left-0 right-0 mt-2 bg-dark-800 border border-dark-600 rounded-lg shadow-2xl overflow-hidden z-50 max-h-80 overflow-y-auto">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+
+            <!-- Header Actions & Status -->
+            <div class="flex items-center gap-3">
+                <!-- Market Mode Selector -->
+                <div class="hidden sm:flex items-center bg-dark-800 border border-dark-600 rounded-lg p-1 text-xs font-medium">
+                    <button id="btn-market-in" class="px-2.5 py-1 rounded bg-dark-700 text-accent font-semibold transition" onclick="switchMarketFilter('IN')">
+                        NSE / BSE (IN)
+                    </button>
+                    <button id="btn-market-us" class="px-2.5 py-1 rounded text-slate-400 hover:text-slate-200 transition" onclick="switchMarketFilter('US')">
+                        Global / US
+                    </button>
+                </div>
+
+                <!-- Watchlist Toggle Button -->
+                <button id="watchlist-toggle-btn" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-dark-800 hover:bg-dark-700 border border-dark-600 text-slate-200 rounded-lg transition" onclick="openWatchlistModal()">
+                    <i class="ph-bold ph-bookmark-simple text-amber-400"></i>
+                    <span>Watchlist</span>
+                    <span id="watchlist-count-badge" class="ml-1 px-1.5 py-0.2 bg-dark-600 text-amber-300 rounded-full text-[10px] font-bold">4</span>
+                </button>
+
+                <!-- Data Feed Health -->
+                <div class="flex items-center gap-2 pl-2 border-l border-dark-600 text-xs">
+                    <span class="pulse-radar"></span>
+                    <span class="text-slate-400 hidden xl:inline">Feed:</span>
+                    <span id="feed-status" class="text-emerald-400 font-medium hidden sm:inline">Active</span>
+                </div>
+            </div>
+
+        </div>
+    </header>
+
+    <!-- Mobile Search Bar (Visible on mobile only) -->
+    <div class="block md:hidden px-4 pt-3 pb-1 bg-dark-900 border-b border-dark-600">
+        <div class="relative">
+            <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+            <input 
+                type="text" 
+                id="mobile-search-input" 
+                placeholder="Search ticker (e.g. RELIANCE, AAPL)..."
+                class="w-full bg-dark-800 border border-dark-600 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-accent"
+            >
+        </div>
+        <div id="mobile-search-dropdown" class="hidden mt-1 bg-dark-800 border border-dark-600 rounded-lg shadow-xl max-h-60 overflow-y-auto"></div>
+    </div>
+
+    <!-- Main Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 lg:px-8 py-6 space-y-6">
+
+        <!-- 1. Market Overview Indices Cards (Feature A) -->
+        <section>
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                    <i class="ph-bold ph-globe text-accent"></i> Market Benchmark Indices
+                </h2>
+                <div class="flex items-center gap-2 text-[11px] text-slate-500">
+                    <span id="indices-timestamp">Last updated: fetching...</span>
+                    <button onclick="refreshMarketOverview()" title="Refresh quotes" class="hover:text-accent transition">
+                        <i class="ph ph-arrows-clockwise text-xs"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4" id="indices-cards-container">
+                <!-- Skeleton Index 1: NIFTY 50 -->
+                <div class="terminal-card p-4 relative overflow-hidden">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <span class="text-xs font-medium text-slate-400">NSE Index</span>
+                            <h3 class="text-base font-bold text-white">NIFTY 50</h3>
+                        </div>
+                        <span id="nifty-badge" class="px-2 py-0.5 text-xs font-semibold rounded bg-dark-700 text-slate-300">--</span>
+                    </div>
+                    <div class="mt-2 flex items-baseline gap-2">
+                        <span id="nifty-price" class="text-2xl font-bold mono-num text-white">--</span>
+                        <span id="nifty-change" class="text-xs mono-num font-medium text-slate-400">--</span>
+                    </div>
+                </div>
+
+                <!-- Skeleton Index 2: SENSEX -->
+                <div class="terminal-card p-4 relative overflow-hidden">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <span class="text-xs font-medium text-slate-400">BSE Index</span>
+                            <h3 class="text-base font-bold text-white">S&P BSE SENSEX</h3>
+                        </div>
+                        <span id="sensex-badge" class="px-2 py-0.5 text-xs font-semibold rounded bg-dark-700 text-slate-300">--</span>
+                    </div>
+                    <div class="mt-2 flex items-baseline gap-2">
+                        <span id="sensex-price" class="text-2xl font-bold mono-num text-white">--</span>
+                        <span id="sensex-change" class="text-xs mono-num font-medium text-slate-400">--</span>
+                    </div>
+                </div>
+
+                <!-- Skeleton Index 3: S&P 500 -->
+                <div class="terminal-card p-4 relative overflow-hidden">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <span class="text-xs font-medium text-slate-400">US Index</span>
+                            <h3 class="text-base font-bold text-white">S&P 500</h3>
+                        </div>
+                        <span id="sp500-badge" class="px-2 py-0.5 text-xs font-semibold rounded bg-dark-700 text-slate-300">--</span>
+                    </div>
+                    <div class="mt-2 flex items-baseline gap-2">
+                        <span id="sp500-price" class="text-2xl font-bold mono-num text-white">--</span>
+                        <span id="sp500-change" class="text-xs mono-num font-medium text-slate-400">--</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. Selected Stock Header & Quick Picker (Feature B) -->
+        <section class="terminal-card p-4 sm:p-5">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                
+                <!-- Stock Info & Price -->
+                <div class="flex flex-wrap items-center gap-4">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h1 id="stock-name" class="text-xl sm:text-2xl font-bold text-white tracking-tight">Reliance Industries Ltd</h1>
+                            <span id="stock-ticker-badge" class="px-2 py-0.5 text-xs font-mono font-bold bg-dark-700 text-accent rounded border border-dark-600">RELIANCE.NS</span>
+                            <span id="stock-exchange-badge" class="px-2 py-0.5 text-[11px] font-medium bg-dark-800 text-slate-400 rounded">NSE</span>
+                        </div>
+                        <div class="flex items-center gap-3 mt-1 text-xs text-slate-400">
+                            <span id="stock-sector">Energy & Conglomerate</span>
+                            <span>•</span>
+                            <span id="stock-currency">INR</span>
+                            <span>•</span>
+                            <span id="stock-status-chip" class="text-emerald-400 flex items-center gap-1">
+                                <i class="ph-fill ph-circle text-[8px]"></i> Market Data Live
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Watchlist Pin Button -->
+                    <button id="toggle-watchlist-btn" onclick="toggleCurrentWatchlist()" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-dark-800 hover:bg-dark-700 border border-dark-600 text-slate-300 flex items-center gap-1.5 transition">
+                        <i id="watchlist-star-icon" class="ph ph-star text-amber-400"></i>
+                        <span id="watchlist-btn-text">Add to Watchlist</span>
+                    </button>
+                </div>
+
+                <!-- Price and Day Change Stats -->
+                <div class="flex items-center gap-6 border-t lg:border-t-0 pt-3 lg:pt-0 border-dark-600">
+                    <div>
+                        <span class="text-[11px] text-slate-400 uppercase font-semibold">Current Price</span>
+                        <div class="flex items-baseline gap-2">
+                            <span id="stock-current-price" class="text-2xl sm:text-3xl font-extrabold mono-num text-white">₹--</span>
+                            <span id="stock-price-change" class="text-xs sm:text-sm mono-num font-semibold px-2 py-0.5 rounded bg-dark-700">--</span>
+                        </div>
+                    </div>
+
+                    <div class="hidden sm:block border-l border-dark-600 pl-6 text-xs space-y-1">
+                        <div class="flex justify-between gap-4">
+                            <span class="text-slate-400">Day High / Low:</span>
+                            <span id="stock-day-range" class="font-mono text-slate-200 font-medium">-- / --</span>
+                        </div>
+                        <div class="flex justify-between gap-4">
+                            <span class="text-slate-400">52W High / Low:</span>
+                            <span id="stock-52w-range" class="font-mono text-slate-200 font-medium">-- / --</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Quick Popular Ticker Chips -->
+            <div class="mt-4 pt-3 border-t border-dark-600 flex items-center gap-2 overflow-x-auto text-xs pb-1">
+                <span class="text-slate-400 font-medium whitespace-nowrap text-[11px]">Popular Trackers:</span>
+                <div class="flex items-center gap-1.5" id="popular-chips-container">
+                    <!-- Populated dynamically via JS -->
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. Primary Analytical Grid (8 cols / 4 cols) -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+            <!-- LEFT STAGE: TradingView Chart & Company Comparison (8 cols) -->
+            <div class="lg:col-span-8 space-y-6">
+
+                <!-- Interactive Financial Chart (Feature E) -->
+                <div class="terminal-card p-4 sm:p-5">
+                    
+                    <!-- Chart Controls Toolbar -->
+                    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                        <div class="flex items-center gap-2">
+                            <h2 class="text-sm font-bold text-white flex items-center gap-1.5">
+                                <i class="ph-bold ph-chart-line-up text-accent"></i> Price Action
+                            </h2>
+                            <span class="text-[11px] text-slate-400">(TradingView Engine)</span>
+                        </div>
+
+                        <!-- Timeframe Range Switcher -->
+                        <div class="flex items-center gap-1 bg-dark-800 p-1 rounded-lg border border-dark-600 text-xs font-semibold">
+                            <button class="timeframe-btn px-2.5 py-1 rounded hover:bg-dark-700 transition" data-range="1D">1D</button>
+                            <button class="timeframe-btn px-2.5 py-1 rounded hover:bg-dark-700 transition" data-range="1W">1W</button>
+                            <button class="timeframe-btn px-2.5 py-1 rounded bg-accent text-dark-900 font-bold shadow transition" data-range="1M">1M</button>
+                            <button class="timeframe-btn px-2.5 py-1 rounded hover:bg-dark-700 transition" data-range="3M">3M</button>
+                            <button class="timeframe-btn px-2.5 py-1 rounded hover:bg-dark-700 transition" data-range="1Y">1Y</button>
+                            <button class="timeframe-btn px-2.5 py-1 rounded hover:bg-dark-700 transition" data-range="ALL">ALL</button>
+                        </div>
+
+                        <!-- Chart Type Toggle -->
+                        <div class="hidden sm:flex items-center gap-1 bg-dark-800 p-1 rounded-lg border border-dark-600 text-xs">
+                            <button id="chart-type-candles" class="px-2 py-1 rounded bg-dark-700 text-accent font-medium" onclick="toggleChartType('candles')">
+                                <i class="ph-bold ph-chart-bar"></i> Candlestick
+                            </button>
+                            <button id="chart-type-area" class="px-2 py-1 rounded text-slate-400 hover:text-white" onclick="toggleChartType('area')">
+                                <i class="ph-bold ph-chart-line"></i> Area
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- TradingView Chart Container -->
+                    <div id="tv-chart-container" class="rounded-lg bg-dark-900 border border-dark-600/50 relative">
+                        <div id="chart-loader" class="absolute inset-0 bg-dark-900/80 backdrop-blur-sm flex flex-col items-center justify-center z-10">
+                            <i class="ph ph-spinner animate-spin text-3xl text-accent mb-2"></i>
+                            <span class="text-xs text-slate-300 font-medium">Loading historical candles...</span>
+                        </div>
+                    </div>
+
+                    <!-- Chart Footer Info -->
+                    <div class="mt-3 flex items-center justify-between text-[11px] text-slate-400 border-t border-dark-600 pt-2">
+                        <span id="chart-data-timestamp">Source: Real-time & Daily Candlesticks via yfinance</span>
+                        <div class="flex items-center gap-3">
+                            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-bullish inline-block"></span> Bullish Candle</span>
+                            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-bearish inline-block"></span> Bearish Candle</span>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Feature G: Multi-Company Sentiment & Price Comparison Matrix -->
+                <div class="terminal-card p-4 sm:p-5">
+                    <div class="flex items-center justify-between mb-3">
+                        <div>
+                            <h2 class="text-sm font-bold text-white flex items-center gap-1.5">
+                                <i class="ph-bold ph-scales text-indigo-400"></i> Peer Company Sentiment Matrix
+                            </h2>
+                            <p class="text-[11px] text-slate-400">Compare market sentiment vs price movements across tracked equities</p>
+                        </div>
+                        <button onclick="loadCompanyComparison()" class="text-xs text-accent hover:underline flex items-center gap-1">
+                            <i class="ph ph-arrows-clockwise"></i> Refresh Matrix
+                        </button>
+                    </div>
+
+                    <!-- Comparison Table -->
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-dark-800 text-slate-400 font-semibold border-b border-dark-600">
+                                <tr>
+                                    <th class="py-2.5 px-3">Company</th>
+                                    <th class="py-2.5 px-3 text-right">Price</th>
+                                    <th class="py-2.5 px-3 text-right">1D Change</th>
+                                    <th class="py-2.5 px-3 text-center">AI Sentiment</th>
+                                    <th class="py-2.5 px-3 text-center">Sentiment Polarity (Pos / Neu / Neg)</th>
+                                    <th class="py-2.5 px-3 text-center">News Vol</th>
+                                    <th class="py-2.5 px-3 text-center">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="comparison-tbody" class="divide-y divide-dark-600">
+                                <!-- Populated dynamically -->
+                                <tr>
+                                    <td colspan="7" class="py-6 text-center text-slate-400">
+                                        <i class="ph ph-spinner animate-spin text-xl text-accent mb-1 inline-block"></i>
+                                        <p>Computing peer sentiment matrix...</p>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- RIGHT STAGE: AI Sentiment Intelligence, Donut, Alerts (4 cols) -->
+            <div class="lg:col-span-4 space-y-6">
+
+                <!-- AI Sentiment Overview Card (Feature D) -->
+                <div class="terminal-card p-4 sm:p-5">
+                    <div class="flex items-center justify-between mb-3">
+                        <h2 class="text-sm font-bold text-white flex items-center gap-1.5">
+                            <i class="ph-bold ph-brain text-accent"></i> AI Sentiment Consensus
+                        </h2>
+                        <span id="model-badge" class="px-2 py-0.5 text-[10px] font-mono font-bold bg-dark-800 text-indigo-400 rounded border border-dark-600">
+                            FinBERT Neural
+                        </span>
+                    </div>
+
+                    <!-- Bullish Gauge / Progress -->
+                    <div class="bg-dark-900 p-4 rounded-xl border border-dark-600 text-center relative overflow-hidden">
+                        <span class="text-[11px] uppercase font-semibold tracking-wider text-slate-400">Bullish Consensus Index</span>
+                        <div class="my-2 flex items-baseline justify-center gap-1">
+                            <span id="bullish-index-val" class="text-4xl font-extrabold mono-num text-white">--</span>
+                            <span class="text-slate-500 font-bold text-sm">/ 100</span>
+                        </div>
+
+                        <!-- Progress Bar -->
+                        <div class="w-full bg-dark-700 rounded-full h-2.5 overflow-hidden my-3">
+                            <div id="bullish-gauge-bar" class="bg-gradient-to-r from-bearish via-amber-400 to-bullish h-2.5 rounded-full transition-all duration-700" style="width: 50%;"></div>
+                        </div>
+
+                        <div class="flex justify-between text-[10px] text-slate-400 font-semibold px-1">
+                            <span class="text-bearish">0 Bearish</span>
+                            <span class="text-slate-400">50 Neutral</span>
+                            <span class="text-bullish">100 Bullish</span>
+                        </div>
+
+                        <!-- Verdict Badge -->
+                        <div class="mt-3">
+                            <span id="sentiment-verdict-badge" class="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold rounded-full bg-dark-800 text-slate-200 border border-dark-600">
+                                Evaluating Coverage...
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Compound Score & Model Confidence -->
+                    <div class="grid grid-cols-2 gap-3 mt-4">
+                        <div class="bg-dark-800/80 p-3 rounded-lg border border-dark-600 text-center">
+                            <span class="text-[10px] uppercase font-semibold text-slate-400">Compound Score</span>
+                            <div id="compound-polarity-val" class="text-base font-bold mono-num text-white mt-0.5">--</div>
+                            <span class="text-[9px] text-slate-500">Range: -1.0 to +1.0</span>
+                        </div>
+                        <div class="bg-dark-800/80 p-3 rounded-lg border border-dark-600 text-center">
+                            <span class="text-[10px] uppercase font-semibold text-slate-400">Model Confidence</span>
+                            <div id="avg-confidence-val" class="text-base font-bold mono-num text-accent mt-0.5">--%</div>
+                            <span class="text-[9px] text-slate-500">FinBERT Softmax</span>
+                        </div>
+                    </div>
+
+                    <!-- Sentiment Distribution Chart (Chart.js Donut) -->
+                    <div class="mt-5 pt-4 border-t border-dark-600">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-xs font-semibold text-slate-300">Sentiment Distribution</span>
+                            <span id="news-sample-count" class="text-[10px] text-slate-400 font-mono">0 articles</span>
+                        </div>
+                        
+                        <div class="relative h-44 flex items-center justify-center">
+                            <canvas id="sentiment-donut-chart"></canvas>
+                        </div>
+
+                        <!-- Donut Legend Breakdown -->
+                        <div class="grid grid-cols-3 gap-2 text-center text-xs mt-3">
+                            <div class="p-1.5 rounded bg-emerald-500/10 border border-emerald-500/20">
+                                <span class="text-[10px] text-emerald-400 block font-semibold">Positive</span>
+                                <span id="pct-positive" class="font-bold font-mono text-emerald-300 text-sm">--%</span>
+                            </div>
+                            <div class="p-1.5 rounded bg-slate-500/10 border border-slate-500/20">
+                                <span class="text-[10px] text-slate-400 block font-semibold">Neutral</span>
+                                <span id="pct-neutral" class="font-bold font-mono text-slate-300 text-sm">--%</span>
+                            </div>
+                            <div class="p-1.5 rounded bg-rose-500/10 border border-rose-500/20">
+                                <span class="text-[10px] text-rose-400 block font-semibold">Negative</span>
+                                <span id="pct-negative" class="font-bold font-mono text-rose-300 text-sm">--%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Sentiment vs Price Movement Correlation (Feature E/F) -->
+                    <div class="mt-4 p-3 rounded-lg bg-dark-900 border border-dark-600">
+                        <div class="flex items-center gap-1.5 text-xs font-semibold text-slate-300 mb-1">
+                            <i class="ph-bold ph-arrows-merge text-accent"></i> Sentiment vs Price Alignment
+                        </div>
+                        <p id="sentiment-alignment-text" class="text-[11px] text-slate-400 leading-relaxed">
+                            Analyzing correlation between recent news polarity and market price movement...
+                        </p>
+                    </div>
+
+                    <!-- Model Transparency & AI Disclaimer -->
+                    <div class="mt-3 p-2.5 rounded bg-dark-800/50 border border-dark-600/60 text-[10px] text-slate-400 leading-tight flex items-start gap-1.5">
+                        <i class="ph-bold ph-info text-slate-500 text-sm mt-0.5"></i>
+                        <span>AI sentiment reflects linguistic tone of financial publications and does not guarantee future price direction or constitute financial advice.</span>
+                    </div>
+
+                </div>
+
+                <!-- In-App Sentiment Alerts Feed (Feature F) -->
+                <div class="terminal-card p-4 sm:p-5">
+                    <div class="flex items-center justify-between mb-3">
+                        <h2 class="text-sm font-bold text-white flex items-center gap-1.5">
+                            <i class="ph-bold ph-bell-ringing text-amber-400"></i> Sentiment Change Alerts
+                        </h2>
+                        <span id="alerts-count-chip" class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-400/10 text-amber-300 border border-amber-400/30">
+                            0 Alerts
+                        </span>
+                    </div>
+
+                    <div id="alerts-feed-container" class="space-y-3 max-h-80 overflow-y-auto pr-1">
+                        <!-- Populated dynamically via JS -->
+                        <div class="p-3 text-center text-slate-400 text-xs">
+                            <i class="ph ph-spinner animate-spin text-accent text-lg mb-1 inline-block"></i>
+                            <p>Scanning for sentiment shifts...</p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- 4. Live Financial News Collection (Feature C) -->
+        <section class="terminal-card p-4 sm:p-5">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                <div>
+                    <h2 class="text-base font-bold text-white flex items-center gap-2">
+                        <i class="ph-bold ph-newspaper text-accent"></i> Real-time Financial News & AI Sentiment
+                    </h2>
+                    <p class="text-xs text-slate-400">Authentic headlines tagged with FinBERT confidence scores and source URLs</p>
+                </div>
+                <div class="flex items-center gap-2 text-xs">
+                    <button onclick="loadStockNews(currentTicker)" class="px-3 py-1.5 bg-dark-800 hover:bg-dark-700 border border-dark-600 rounded-lg text-slate-300 flex items-center gap-1.5 transition">
+                        <i class="ph ph-arrows-clockwise text-accent"></i> Refresh Coverage
+                    </button>
+                </div>
+            </div>
+
+            <!-- News Grid -->
+            <div id="news-feed-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <!-- Skeletons loaded via JS -->
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Watchlist Modal / Drawer -->
+    <div id="watchlist-modal" class="fixed inset-0 bg-dark-900/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-dark-800 border border-dark-600 rounded-2xl max-w-lg w-full p-5 shadow-2xl relative">
+            <div class="flex items-center justify-between pb-3 border-b border-dark-600">
+                <div class="flex items-center gap-2">
+                    <i class="ph-bold ph-bookmark-simple text-amber-400 text-xl"></i>
+                    <h3 class="text-base font-bold text-white">Your Tracked Watchlist</h3>
+                </div>
+                <button onclick="closeWatchlistModal()" class="text-slate-400 hover:text-white transition">
+                    <i class="ph-bold ph-x text-lg"></i>
+                </button>
+            </div>
+
+            <div id="watchlist-modal-content" class="py-4 space-y-2 max-h-80 overflow-y-auto">
+                <!-- Dynamic Watchlist Items -->
+            </div>
+
+            <div class="pt-3 border-t border-dark-600 flex justify-end">
+                <button onclick="closeWatchlistModal()" class="px-4 py-2 bg-dark-700 hover:bg-dark-600 text-slate-200 text-xs font-semibold rounded-lg transition">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application Footer -->
+    <footer class="bg-dark-900 border-t border-dark-600 py-6 px-4 lg:px-8 mt-12 text-xs text-slate-400">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <span class="font-bold text-white tracking-tight">Trend<span class="text-accent">Pulse</span> AI</span>
+                <span>•</span>
+                <span>Financial NLP & Sentiment Architecture</span>
+                <span>•</span>
+                <span class="text-slate-400">Models: Hugging Face FinBERT + yfinance Data Pipeline</span>
+            </div>
+            <div class="text-[11px] text-slate-400 text-center md:text-right">
+                Built for Hackathon MVP • Real-time Quotes & AI Classification
+            </div>
+        </div>
+    </footer>
+
+    <!-- Pass default ticker from Django -->
+    <script>
+        const DEFAULT_TICKER = "{{ default_ticker|default:'RELIANCE.NS' }}";
+    </script>
+    <!-- Main Dashboard Script -->
+    <script src="/static/js/dashboard.js"></script>
+</body>
+</html>
